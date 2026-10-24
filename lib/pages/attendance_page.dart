@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../models/worker.dart';
+import '../services/worker_service.dart';
+
 class AttendancePage extends StatefulWidget {
   const AttendancePage({super.key});
 
@@ -10,20 +13,36 @@ class AttendancePage extends StatefulWidget {
 class _AttendancePageState extends State<AttendancePage> {
   DateTime selectedDate = DateTime.now();
 
-  final List<Map<String, dynamic>> workers = [
-    {'name': 'Rahul Patel', 'id': 'WK001', 'status': 'Present'},
-    {'name': 'Amit Shah', 'id': 'WK002', 'status': 'Absent'},
-    {'name': 'Vijay Parmar', 'id': 'WK003', 'status': 'Half-day'},
-  ];
+  final WorkerService workerService = WorkerService.instance;
 
-  int get presentCount =>
-      workers.where((worker) => worker['status'] == 'Present').length;
+  @override
+  void initState() {
+    super.initState();
+    workerService.addListener(_onWorkersChanged);
+  }
+
+  void _onWorkersChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    workerService.removeListener(_onWorkersChanged);
+    super.dispose();
+  }
+
+  int get presentCount => workerService.workers
+      .where((worker) => worker.status == 'Present')
+      .length;
 
   int get absentCount =>
-      workers.where((worker) => worker['status'] == 'Absent').length;
+      workerService.workers.where((worker) => worker.status == 'Absent').length;
 
-  int get halfDayCount =>
-      workers.where((worker) => worker['status'] == 'Half-day').length;
+  int get halfDayCount => workerService.workers
+      .where((worker) => worker.status == 'Half-day')
+      .length;
 
   Future<void> pickDate() async {
     final picked = await showDatePicker(
@@ -44,17 +63,15 @@ class _AttendancePageState extends State<AttendancePage> {
       },
     );
 
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() {
         selectedDate = picked;
       });
     }
   }
 
-  void updateStatus(int index, String status) {
-    setState(() {
-      workers[index]['status'] = status;
-    });
+  void updateStatus(String workerId, String status) {
+    workerService.updateStatus(workerId, status);
   }
 
   Color statusColor(String status) {
@@ -70,6 +87,8 @@ class _AttendancePageState extends State<AttendancePage> {
 
   @override
   Widget build(BuildContext context) {
+    final workers = workerService.workers;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -166,104 +185,111 @@ class _AttendancePageState extends State<AttendancePage> {
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            ...workers.asMap().entries.map((entry) {
-              final index = entry.key;
-              final worker = entry.value;
-              final status = worker['status'] as String;
+            if (workers.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: Text('No workers added yet.')),
+              )
+            else
+              ...workers.map((Worker worker) {
+                final status = worker.status;
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF151B2E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: const Color(
-                            0xFF8B5CF6,
-                          ).withValues(alpha: 0.18),
-                          child: const Icon(
-                            Icons.person_outline,
-                            color: Color(0xFF8B5CF6),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                worker['name'] as String,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                worker['id'] as String,
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor(status).withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            status,
-                            style: TextStyle(
-                              color: statusColor(status),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                return Container(
+                  key: ValueKey(worker.id),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF151B2E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: const Color(
+                              0xFF8B5CF6,
+                            ).withValues(alpha: 0.18),
+                            child: const Icon(
+                              Icons.person_outline,
+                              color: Color(0xFF8B5CF6),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        _StatusButton(
-                          label: 'Present',
-                          selected: status == 'Present',
-                          color: const Color(0xFF22C55E),
-                          onTap: () => updateStatus(index, 'Present'),
-                        ),
-                        const SizedBox(width: 6),
-                        _StatusButton(
-                          label: 'Absent',
-                          selected: status == 'Absent',
-                          color: const Color(0xFFEF4444),
-                          onTap: () => updateStatus(index, 'Absent'),
-                        ),
-                        const SizedBox(width: 6),
-                        _StatusButton(
-                          label: 'Half-day',
-                          selected: status == 'Half-day',
-                          color: const Color(0xFFF59E0B),
-                          onTap: () => updateStatus(index, 'Half-day'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  worker.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  worker.id,
+                                  style: const TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor(
+                                status,
+                              ).withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                color: statusColor(status),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          _StatusButton(
+                            label: 'Present',
+                            selected: status == 'Present',
+                            color: const Color(0xFF22C55E),
+                            onTap: () => updateStatus(worker.id, 'Present'),
+                          ),
+                          const SizedBox(width: 6),
+                          _StatusButton(
+                            label: 'Absent',
+                            selected: status == 'Absent',
+                            color: const Color(0xFFEF4444),
+                            onTap: () => updateStatus(worker.id, 'Absent'),
+                          ),
+                          const SizedBox(width: 6),
+                          _StatusButton(
+                            label: 'Half-day',
+                            selected: status == 'Half-day',
+                            color: const Color(0xFFF59E0B),
+                            onTap: () => updateStatus(worker.id, 'Half-day'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
           ],
         ),
       ),
