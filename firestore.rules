@@ -1,57 +1,72 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function myUserDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function hasRole(role) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && myUserDoc().role == role;
-    }
-
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function hasUserDoc() { return signedIn() && exists(userPath()); }
+    function myRole() { return get(userPath()).data.role; }
+    function hasRole(role) { return hasUserDoc() && myRole() == role; }
     function isOwner() { return hasRole('owner'); }
     function isManager() { return isOwner() || hasRole('member'); }
+    function isWorker() { return hasRole('worker'); }
 
-    // Roles are provisioned by a trusted administrator in Firebase Console.
-    // Clients cannot create user documents or change their own role.
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isOwner());
-      allow create: if false;
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data.role == resource.data.role;
-      allow delete: if false;
+      // Provision users and roles only from Firebase Console or trusted Admin SDK.
+      allow create, delete: if false;
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'photoUrl', 'updatedAt']);
     }
 
     match /sites/{siteId} {
-      allow read: if signedIn()
-        && (isOwner() || hasRole('member') || hasRole('worker'));
-      allow create, update, delete: if isOwner();
+      allow read: if isManager() || isWorker();
+      allow create: if isOwner()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.isActive == true;
+      allow update: if isOwner();
+      allow delete: if false;
     }
 
-    // Baseline access for future attendance/transaction collections.
-    // Keep owner/member write permissions and worker own-record reads explicit.
+    match /workers/{workerId} {
+      allow read: if isManager()
+        || (isWorker() && resource.data.uid == request.auth.uid);
+      allow create: if isManager()
+        && request.resource.data.name is string
+        && request.resource.data.phone is string
+        && request.resource.data.isActive == true;
+      allow update: if isManager();
+      allow delete: if false;
+    }
+
     match /attendance_records/{recordId} {
       allow read: if isManager()
-        || (hasRole('worker') && resource.data.workerUid == request.auth.uid);
-      allow create, update, delete: if isManager();
+        || (isWorker() && resource.data.workerUid == request.auth.uid);
+      allow create, update: if isManager()
+        && request.resource.data.workerId is string
+        && request.resource.data.workerUid is string
+        && request.resource.data.date is string
+        && request.resource.data.status in ['Present', 'Absent', 'Half-day']
+        && request.resource.data.siteWorkTimes is list
+        && (request.resource.data.status != 'Absent' || request.resource.data.siteWorkTimes.size() == 0)
+        && (request.resource.data.status == 'Absent' || request.resource.data.siteWorkTimes.size() > 0);
+      allow delete: if isOwner();
     }
 
     match /transactions/{transactionId} {
       allow read: if isManager()
-        || (hasRole('worker')
-          && resource.data.workerUid == request.auth.uid
-          && resource.data.approved == true);
-      allow create, update, delete: if isManager();
+        || (isWorker() && resource.data.workerUid == request.auth.uid && resource.data.approved == true);
+      allow create: if isManager()
+        && request.resource.data.workerId is string
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.type in ['Salary', 'Advance', 'Credit', 'Debit', 'Deposit']
+        && request.resource.data.approved is bool;
+      allow update: if isManager();
+      allow delete: if isOwner();
     }
 
-    // Deny all unlisted collections by default.
     match /{document=**} {
       allow read, write: if false;
     }

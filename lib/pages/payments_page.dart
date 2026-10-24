@@ -1,560 +1,298 @@
 import 'package:flutter/material.dart';
-
 import '../models/transaction.dart';
 import '../models/worker.dart';
+import '../services/payment_service.dart';
 import '../services/worker_service.dart';
 
 class PaymentsPage extends StatefulWidget {
-  const PaymentsPage({super.key});
-
+  const PaymentsPage({super.key, this.workerMode = false});
+  final bool workerMode;
   @override
   State<PaymentsPage> createState() => _PaymentsPageState();
 }
 
 class _PaymentsPageState extends State<PaymentsPage> {
-  final WorkerService workerService = WorkerService.instance;
-
-  final TextEditingController amountController = TextEditingController();
-  final TextEditingController noteController = TextEditingController();
-
-  String selectedWorkerId = 'WK001';
-  String selectedType = 'Credit';
-  String selectedMethod = 'Cash';
-
-  final List<PaymentTransaction> transactions = [
-    PaymentTransaction(
-      id: 'TXN001',
-      workerId: 'WK001',
-      type: 'Credit',
-      amount: 5000,
-      method: 'Bank',
-      note: 'Monthly salary',
-      date: DateTime.now(),
-    ),
-    PaymentTransaction(
-      id: 'TXN002',
-      workerId: 'WK002',
-      type: 'Debit',
-      amount: 1000,
-      method: 'Cash',
-      note: 'Advance payment',
-      date: DateTime.now(),
-    ),
-    PaymentTransaction(
-      id: 'TXN003',
-      workerId: 'WK003',
-      type: 'Credit',
-      amount: 2500,
-      method: 'UPI',
-      note: 'Payment',
-      date: DateTime.now(),
-    ),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    workerService.addListener(_onWorkersChanged);
-  }
-
-  void _onWorkersChanged() {
-    if (!mounted) return;
-
-    setState(() {
-      if (workerService.findById(selectedWorkerId) == null &&
-          workerService.workers.isNotEmpty) {
-        selectedWorkerId = workerService.workers.first.id;
-      }
-    });
-  }
+  final _payments = PaymentService();
+  final _workers = WorkerService();
+  final _amount = TextEditingController();
+  final _note = TextEditingController();
+  String? _workerId;
+  String _type = 'Salary';
+  String _method = 'Cash';
+  bool _approved = true;
 
   @override
   void dispose() {
-    workerService.removeListener(_onWorkersChanged);
-    amountController.dispose();
-    noteController.dispose();
+    _amount.dispose();
+    _note.dispose();
     super.dispose();
   }
 
-  // Calculate total money received.
-  double get totalCredit => transactions
-      .where((transaction) => transaction.type == 'Credit')
-      .fold<double>(0, (total, transaction) => total + transaction.amount);
+  double _signed(PaymentTransaction t) =>
+      ['Debit', 'Advance'].contains(t.type) ? -t.amount : t.amount;
+  String _money(double v) => '₹${v.toStringAsFixed(2)}';
 
-  // Calculate total money paid out.
-  double get totalDebit => transactions
-      .where((transaction) => transaction.type == 'Debit')
-      .fold<double>(0, (total, transaction) => total + transaction.amount);
-
-  // Current balance = money in - money out.
-  double get balance => totalCredit - totalDebit;
-
-  String money(double amount) => '₹${amount.toStringAsFixed(2)}';
-
-  Color typeColor(String type) {
-    return type == 'Credit' ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
-  }
-
-  String formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/'
-        '${date.month.toString().padLeft(2, '0')}/'
-        '${date.year}';
-  }
-
-  void showAddTransactionDialog() {
-    if (workerService.workers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add a worker before adding a payment.'),
-        ),
-      );
+  Future<void> _add(List<Worker> workers) async {
+    if (workers.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Add a worker first.')));
       return;
     }
-
-    amountController.clear();
-    noteController.clear();
-
-    if (workerService.findById(selectedWorkerId) == null) {
-      selectedWorkerId = workerService.workers.first.id;
-    }
-
-    selectedType = 'Credit';
-    selectedMethod = 'Cash';
-
-    showDialog<void>(
+    _amount.clear();
+    _note.clear();
+    _workerId = workers.first.id;
+    _type = 'Salary';
+    _method = 'Cash';
+    _approved = true;
+    await showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF151D32),
-              title: const Text('Add Transaction'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedWorkerId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Select Worker',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: workerService.workers.map((worker) {
-                        return DropdownMenuItem<String>(
-                          value: worker.id,
-                          child: Text(
-                            worker.name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() {
-                          selectedWorkerId = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedType,
-                      decoration: const InputDecoration(
-                        labelText: 'Transaction Type',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Credit',
-                          child: Text('Credit (Money In)'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Debit',
-                          child: Text('Debit (Money Out)'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() {
-                          selectedType = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
-                        prefixText: '₹ ',
-                        prefixIcon: Icon(Icons.currency_rupee),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedMethod,
-                      decoration: const InputDecoration(
-                        labelText: 'Payment Method',
-                        prefixIcon: Icon(Icons.payment),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                        DropdownMenuItem(value: 'UPI', child: Text('UPI')),
-                        DropdownMenuItem(
-                          value: 'Bank',
-                          child: Text('Bank Transfer'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() {
-                          selectedMethod = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextField(
-                      controller: noteController,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        labelText: 'Note',
-                        hintText: 'e.g. Monthly salary',
-                        prefixIcon: Icon(Icons.notes),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('Add transaction'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: _workerId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Worker'),
+                  items: workers
+                      .map(
+                        (w) =>
+                            DropdownMenuItem(value: w.id, child: Text(w.name)),
+                      )
+                      .toList(),
+                  onChanged: (v) => setDialog(() => _workerId = v),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: _type,
+                  decoration: const InputDecoration(labelText: 'Type'),
+                  items:
+                      const ['Salary', 'Advance', 'Credit', 'Debit', 'Deposit']
+                          .map(
+                            (v) => DropdownMenuItem(value: v, child: Text(v)),
+                          )
+                          .toList(),
+                  onChanged: (v) => setDialog(() => _type = v ?? 'Salary'),
                 ),
-                FilledButton(
-                  onPressed: () {
-                    final amountText = amountController.text.trim();
-                    final amount = double.tryParse(amountText);
-
-                    if (amount == null || !amount.isFinite || amount <= 0) {
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Enter a valid amount greater than zero.',
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-
-                    final Worker? worker = workerService.findById(
-                      selectedWorkerId,
-                    );
-
-                    if (worker == null) {
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please select a valid worker.'),
-                        ),
-                      );
-                      return;
-                    }
-
-                    final transaction = PaymentTransaction(
-                      id: 'TXN${DateTime.now().microsecondsSinceEpoch}',
-                      workerId: worker.id,
-                      type: selectedType,
-                      amount: amount,
-                      method: selectedMethod,
-                      note: noteController.text.trim().isEmpty
-                          ? 'No note'
-                          : noteController.text.trim(),
-                      date: DateTime.now(),
-                    );
-
-                    setState(() {
-                      transactions.insert(0, transaction);
-                    });
-
-                    Navigator.pop(dialogContext);
-
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Transaction added successfully.'),
-                      ),
-                    );
-                  },
-                  child: const Text('Add'),
+                TextField(
+                  controller: _amount,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'Amount (₹)'),
+                ),
+                TextField(
+                  controller: _note,
+                  decoration: const InputDecoration(labelText: 'Note'),
+                ),
+                DropdownButtonFormField<String>(
+                  value: _method,
+                  decoration: const InputDecoration(labelText: 'Method'),
+                  items: const ['Cash', 'Bank', 'UPI']
+                      .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                      .toList(),
+                  onChanged: (v) => setDialog(() => _method = v ?? 'Cash'),
+                ),
+                SwitchListTile(
+                  title: const Text('Approved for worker'),
+                  value: _approved,
+                  onChanged: (v) => setDialog(() => _approved = v),
                 ),
               ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Payments',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            onPressed: showAddTransactionDialog,
-            icon: const Icon(Icons.add_card),
-            tooltip: 'Add Transaction',
+            ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: showAddTransactionDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Transaction'),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Balance card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF312E81), Color(0xFF6D28D9)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.account_balance_wallet_outlined,
-                        color: Colors.white70,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final matches = workers
+                    .where((w) => w.id == _workerId)
+                    .toList();
+                final worker = matches.isEmpty ? null : matches.first;
+                final amount = double.tryParse(_amount.text.trim());
+                if (worker == null || amount == null || amount <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Select a worker and enter a valid amount.',
                       ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Current Balance',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    money(balance),
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Total credit minus total debit',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ],
-              ),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx);
+                try {
+                  await _payments.addTransaction(
+                    worker: worker,
+                    type: _type,
+                    amount: amount,
+                    method: _method,
+                    note: _note.text,
+                    approved: _approved,
+                  );
+                  if (mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Transaction saved.')),
+                    );
+                } catch (e) {
+                  if (mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Could not save transaction: $e')),
+                    );
+                }
+              },
+              child: const Text('Save'),
             ),
-
-            const SizedBox(height: 18),
-
-            // Credit and debit summary
-            Row(
-              children: [
-                Expanded(
-                  child: _SummaryCard(
-                    title: 'Total Credit',
-                    amount: money(totalCredit),
-                    color: const Color(0xFF22C55E),
-                    icon: Icons.arrow_downward,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _SummaryCard(
-                    title: 'Total Debit',
-                    amount: money(totalDebit),
-                    color: const Color(0xFFEF4444),
-                    icon: Icons.arrow_upward,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // Transaction history heading
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Transaction History',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '${transactions.length} records',
-                  style: TextStyle(color: Colors.grey.shade400),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            if (transactions.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: Text('No transactions available.')),
-              )
-            else
-              ...transactions.map((transaction) {
-                final type = transaction.type;
-                final color = typeColor(type);
-                final worker = workerService.findById(transaction.workerId);
-                final workerName = worker?.name ?? 'Unknown worker';
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF151D32),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: color.withValues(alpha: 0.14),
-                        child: Icon(
-                          type == 'Credit'
-                              ? Icons.arrow_downward
-                              : Icons.arrow_upward,
-                          color: color,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              workerName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              transaction.note,
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${formatDate(transaction.date)}'
-                              ' • ${transaction.method}',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: 8),
-
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${type == 'Credit' ? '+' : '-'}'
-                            '${money(transaction.amount)}',
-                            style: TextStyle(
-                              color: color,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            type,
-                            style: TextStyle(color: color, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-
-            const SizedBox(height: 80),
           ],
         ),
       ),
     );
   }
-}
-
-class _SummaryCard extends StatelessWidget {
-  final String title;
-  final String amount;
-  final Color color;
-  final IconData icon;
-
-  const _SummaryCard({
-    required this.title,
-    required this.amount,
-    required this.color,
-    required this.icon,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151D32),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+    if (widget.workerMode) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Approved Payments')),
+        body: StreamBuilder<List<PaymentTransaction>>(
+          stream: _payments.watchMyApprovedTransactions(),
+          builder: (context, snap) {
+            if (snap.hasError)
+              return const Center(
+                child: Text('Could not load approved payments.'),
+              );
+            if (!snap.hasData)
+              return const Center(child: CircularProgressIndicator());
+            final list = snap.data!;
+            final balance = list.fold<double>(0, (sum, t) => sum + _signed(t));
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: ListTile(
+                    title: const Text('Net approved balance'),
+                    titleTextStyle: Theme.of(context).textTheme.titleMedium,
+                    subtitle: Text(
+                      _money(balance),
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                ...list.map(
+                  (t) => Card(
+                    child: ListTile(
+                      title: Text('${t.type} • ${_money(t.amount)}'),
+                      subtitle: Text(
+                        '${t.note}\n${t.date.toLocal().toString().split(' ').first} • ${t.method}',
+                      ),
+                      isThreeLine: true,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('Payments')),
+      body: StreamBuilder<List<Worker>>(
+        stream: _workers.watchWorkers(),
+        builder: (context, workerSnap) {
+          if (workerSnap.hasError)
+            return const Center(child: Text('Could not load workers.'));
+          if (!workerSnap.hasData)
+            return const Center(child: CircularProgressIndicator());
+          final workers = workerSnap.data!;
+          return StreamBuilder<List<PaymentTransaction>>(
+            stream: _payments.watchTransactions(),
+            builder: (context, txSnap) {
+              if (txSnap.hasError)
+                return const Center(
+                  child: Text(
+                    'Could not load transactions. Check Firestore rules/indexes.',
+                  ),
+                );
+              if (!txSnap.hasData)
+                return const Center(child: CircularProgressIndicator());
+              final list = txSnap.data!;
+              final total = list.fold<double>(0, (s, t) => s + _signed(t));
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                      ),
+                      title: const Text('Net ledger total'),
+                      subtitle: Text(
+                        _money(total),
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      trailing: IconButton(
+                        onPressed: () => _add(workers),
+                        icon: const Icon(Icons.add_circle),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (list.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(
+                        child: Text('No transactions yet. Tap + to add one.'),
+                      ),
+                    ),
+                  ...list.map(
+                    (t) => Card(
+                      child: ListTile(
+                        leading: Icon(
+                          ['Debit', 'Advance'].contains(t.type)
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward,
+                          color: ['Debit', 'Advance'].contains(t.type)
+                              ? Colors.redAccent
+                              : Colors.green,
+                        ),
+                        title: Text('${t.workerName} • ${t.type}'),
+                        subtitle: Text(
+                          '${t.note}\n${t.date.toLocal().toString().split(' ').first} • ${t.method} • ${t.approved ? 'Approved' : 'Pending approval'}',
+                        ),
+                        isThreeLine: true,
+                        trailing: Text(
+                          _money(_signed(t)),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 25),
-          const SizedBox(height: 12),
-          Text(
-            amount,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            title,
-            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final workers = await _workers.watchWorkers().first;
+          if (mounted) _add(workers);
+        },
+        child: const Icon(Icons.add),
       ),
     );
   }
