@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myUserDoc().role == role;
+    }
+
+    function isOwner() { return hasRole('owner'); }
+    function isManager() { return isOwner() || hasRole('member'); }
+
+    // Roles are provisioned by a trusted administrator in Firebase Console.
+    // Clients cannot create user documents or change their own role.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow create: if false;
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role;
+      allow delete: if false;
+    }
+
+    match /sites/{siteId} {
+      allow read: if signedIn()
+        && (isOwner() || hasRole('member') || hasRole('worker'));
+      allow create, update, delete: if isOwner();
+    }
+
+    // Baseline access for future attendance/transaction collections.
+    // Keep owner/member write permissions and worker own-record reads explicit.
+    match /attendance_records/{recordId} {
+      allow read: if isManager()
+        || (hasRole('worker') && resource.data.workerUid == request.auth.uid);
+      allow create, update, delete: if isManager();
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isManager()
+        || (hasRole('worker')
+          && resource.data.workerUid == request.auth.uid
+          && resource.data.approved == true);
+      allow create, update, delete: if isManager();
+    }
+
+    // Deny all unlisted collections by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
