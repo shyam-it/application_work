@@ -3,9 +3,13 @@ import '../pages/workers_page.dart';
 import '../pages/attendance_page.dart';
 import '../pages/payments_page.dart';
 import '../pages/site_management_page.dart';
+import '../pages/account_status_page.dart';
+import '../services/auth_service.dart';
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  const MainNavigation({super.key, required this.role});
+
+  final String role;
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -13,27 +17,78 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int selectedIndex = 0;
+  late final List<_NavDestination> destinations = _buildDestinations();
 
-  void navigateTo(int index) {
-    setState(() {
-      selectedIndex = index;
-    });
+  List<_NavDestination> _buildDestinations() {
+    if (widget.role == 'worker') {
+      return [
+        _NavDestination(
+          'Home',
+          const Icon(Icons.dashboard_rounded),
+          HomePage(role: widget.role, onNavigate: navigateTo),
+        ),
+        _NavDestination(
+          'Profile',
+          const Icon(Icons.person_outline),
+          const AccountStatusPage(
+            title: 'Worker Profile',
+            message:
+                'Your personal profile and attendance view will be available here.',
+          ),
+        ),
+      ];
+    }
+    final items = <_NavDestination>[
+      _NavDestination(
+        'Home',
+        const Icon(Icons.dashboard_rounded),
+        HomePage(role: widget.role, onNavigate: navigateTo),
+      ),
+      _NavDestination(
+        'Workers',
+        const Icon(Icons.groups_rounded),
+        const WorkersPage(),
+      ),
+      _NavDestination(
+        'Attendance',
+        const Icon(Icons.calendar_month),
+        const AttendancePage(),
+      ),
+      _NavDestination(
+        'Profile',
+        const Icon(Icons.person_outline),
+        const _ProfilePage(),
+      ),
+      _NavDestination(
+        'Payments',
+        const Icon(Icons.payments_outlined),
+        const PaymentsPage(),
+      ),
+    ];
+    if (widget.role == 'owner') {
+      items.add(
+        _NavDestination(
+          'Sites',
+          const Icon(Icons.location_on_outlined),
+          const SiteManagementPage(),
+        ),
+      );
+    }
+    return items;
   }
 
-  late final List<Widget> pages = [
-    HomePage(onNavigate: navigateTo),
-    const WorkersPage(),
-    const AttendancePage(),
-    const PlaceholderPage(title: 'Profile', icon: Icons.person_outline),
-    const PaymentsPage(),
-    const SiteManagementPage(),
-  ];
+  void navigateTo(int index) {
+    if (index < 0 || index >= destinations.length) return;
+    setState(() => selectedIndex = index);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: selectedIndex, children: pages),
-
+      body: IndexedStack(
+        index: selectedIndex,
+        children: destinations.map((item) => item.page).toList(),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedIndex,
         type: BottomNavigationBarType.fixed,
@@ -41,43 +96,60 @@ class _MainNavigationState extends State<MainNavigation> {
         selectedItemColor: const Color(0xFFA78BFA),
         unselectedItemColor: Colors.grey,
         onTap: navigateTo,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_rounded),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.groups_rounded),
-            label: 'Workers',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month),
-            label: 'Attendance',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.payments_outlined),
-            label: 'Payments',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.location_on_outlined),
-            label: 'Sites',
-          ),
-        ],
+        items: destinations
+            .map(
+              (item) =>
+                  BottomNavigationBarItem(icon: item.icon, label: item.label),
+            )
+            .toList(),
       ),
     );
   }
+}
+
+class _NavDestination {
+  const _NavDestination(this.label, this.icon, this.page);
+  final String label;
+  final Icon icon;
+  final Widget page;
+}
+
+class _ProfilePage extends StatelessWidget {
+  const _ProfilePage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Profile')),
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.account_circle_outlined,
+            size: 64,
+            color: Color(0xFFA78BFA),
+          ),
+          const SizedBox(height: 12),
+          const Text('WorkMate account'),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: () => AuthService().signOut(),
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 // HOME PAGE
 
 class HomePage extends StatelessWidget {
   final ValueChanged<int> onNavigate;
+  final String role;
 
-  const HomePage({super.key, required this.onNavigate});
+  const HomePage({super.key, required this.role, required this.onNavigate});
 
   @override
   Widget build(BuildContext context) {
@@ -101,8 +173,8 @@ class HomePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Welcome back, Owner 👋',
+              Text(
+                'Welcome back, ${role[0].toUpperCase()}${role.substring(1)} 👋',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -196,52 +268,54 @@ class HomePage extends StatelessWidget {
 
               const SizedBox(height: 28),
 
-              const Text(
-                'Quick Actions',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
+              if (role != 'worker') ...[
+                const Text(
+                  'Quick Actions',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _actionCard(
-                      Icons.person_add_alt_1,
-                      'Add Worker',
-                      () => onNavigate(1),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _actionCard(
+                        Icons.person_add_alt_1,
+                        'Add Worker',
+                        () => onNavigate(1),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _actionCard(
-                      Icons.calendar_month,
-                      'Attendance',
-                      () => onNavigate(2),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _actionCard(
+                        Icons.calendar_month,
+                        'Attendance',
+                        () => onNavigate(2),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                  ],
+                ),
+                const SizedBox(height: 12),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _actionCard(
-                      Icons.account_balance_wallet_outlined,
-                      'Payments',
-                      () => onNavigate(4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _actionCard(
+                        Icons.account_balance_wallet_outlined,
+                        'Payments',
+                        () => onNavigate(4),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _actionCard(
-                      Icons.bar_chart_rounded,
-                      'Reports',
-                      () => _showComingSoon(context, 'Reports'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _actionCard(
+                        Icons.bar_chart_rounded,
+                        'Reports',
+                        () => _showComingSoon(context, 'Reports'),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
