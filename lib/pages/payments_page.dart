@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/transaction.dart';
 import '../models/worker.dart';
 import '../services/worker_service.dart';
 
@@ -20,34 +21,34 @@ class _PaymentsPageState extends State<PaymentsPage> {
   String selectedType = 'Credit';
   String selectedMethod = 'Cash';
 
-  final List<Map<String, dynamic>> transactions = [
-    {
-      'workerId': 'WK001',
-      'name': 'Rahul Patel',
-      'type': 'Credit',
-      'amount': 5000.0,
-      'method': 'Bank',
-      'note': 'Monthly salary',
-      'date': DateTime.now(),
-    },
-    {
-      'workerId': 'WK002',
-      'name': 'Amit Shah',
-      'type': 'Debit',
-      'amount': 1000.0,
-      'method': 'Cash',
-      'note': 'Advance payment',
-      'date': DateTime.now(),
-    },
-    {
-      'workerId': 'WK003',
-      'name': 'Vijay Parmar',
-      'type': 'Credit',
-      'amount': 2500.0,
-      'method': 'UPI',
-      'note': 'Payment',
-      'date': DateTime.now(),
-    },
+  final List<PaymentTransaction> transactions = [
+    PaymentTransaction(
+      id: 'TXN001',
+      workerId: 'WK001',
+      type: 'Credit',
+      amount: 5000,
+      method: 'Bank',
+      note: 'Monthly salary',
+      date: DateTime.now(),
+    ),
+    PaymentTransaction(
+      id: 'TXN002',
+      workerId: 'WK002',
+      type: 'Debit',
+      amount: 1000,
+      method: 'Cash',
+      note: 'Advance payment',
+      date: DateTime.now(),
+    ),
+    PaymentTransaction(
+      id: 'TXN003',
+      workerId: 'WK003',
+      type: 'Credit',
+      amount: 2500,
+      method: 'UPI',
+      note: 'Payment',
+      date: DateTime.now(),
+    ),
   ];
 
   @override
@@ -75,28 +76,29 @@ class _PaymentsPageState extends State<PaymentsPage> {
     super.dispose();
   }
 
+  // Calculate total money received.
   double get totalCredit => transactions
-      .where((transaction) => transaction['type'] == 'Credit')
-      .fold<double>(
-        0,
-        (total, transaction) =>
-            total + (transaction['amount'] as num).toDouble(),
-      );
+      .where((transaction) => transaction.type == 'Credit')
+      .fold<double>(0, (total, transaction) => total + transaction.amount);
 
+  // Calculate total money paid out.
   double get totalDebit => transactions
-      .where((transaction) => transaction['type'] == 'Debit')
-      .fold<double>(
-        0,
-        (total, transaction) =>
-            total + (transaction['amount'] as num).toDouble(),
-      );
+      .where((transaction) => transaction.type == 'Debit')
+      .fold<double>(0, (total, transaction) => total + transaction.amount);
 
+  // Current balance = money in - money out.
   double get balance => totalCredit - totalDebit;
 
   String money(double amount) => '₹${amount.toStringAsFixed(2)}';
 
   Color typeColor(String type) {
     return type == 'Credit' ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
+  }
+
+  String formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
   }
 
   void showAddTransactionDialog() {
@@ -149,14 +151,14 @@ class _PaymentsPageState extends State<PaymentsPage> {
                         );
                       }).toList(),
                       onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedWorkerId = value;
-                          });
-                        }
+                        if (value == null) return;
+                        setDialogState(() {
+                          selectedWorkerId = value;
+                        });
                       },
                     ),
                     const SizedBox(height: 16),
+
                     DropdownButtonFormField<String>(
                       initialValue: selectedType,
                       decoration: const InputDecoration(
@@ -174,14 +176,14 @@ class _PaymentsPageState extends State<PaymentsPage> {
                         ),
                       ],
                       onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedType = value;
-                          });
-                        }
+                        if (value == null) return;
+                        setDialogState(() {
+                          selectedType = value;
+                        });
                       },
                     ),
                     const SizedBox(height: 16),
+
                     TextField(
                       controller: amountController,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -195,6 +197,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
                     DropdownButtonFormField<String>(
                       initialValue: selectedMethod,
                       decoration: const InputDecoration(
@@ -211,14 +214,14 @@ class _PaymentsPageState extends State<PaymentsPage> {
                         ),
                       ],
                       onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            selectedMethod = value;
-                          });
-                        }
+                        if (value == null) return;
+                        setDialogState(() {
+                          selectedMethod = value;
+                        });
                       },
                     ),
                     const SizedBox(height: 16),
+
                     TextField(
                       controller: noteController,
                       textCapitalization: TextCapitalization.sentences,
@@ -266,18 +269,20 @@ class _PaymentsPageState extends State<PaymentsPage> {
                       return;
                     }
 
+                    final transaction = PaymentTransaction(
+                      id: 'TXN${DateTime.now().microsecondsSinceEpoch}',
+                      workerId: worker.id,
+                      type: selectedType,
+                      amount: amount,
+                      method: selectedMethod,
+                      note: noteController.text.trim().isEmpty
+                          ? 'No note'
+                          : noteController.text.trim(),
+                      date: DateTime.now(),
+                    );
+
                     setState(() {
-                      transactions.insert(0, {
-                        'workerId': worker.id,
-                        'name': worker.name,
-                        'type': selectedType,
-                        'amount': amount,
-                        'method': selectedMethod,
-                        'note': noteController.text.trim().isEmpty
-                            ? 'No note'
-                            : noteController.text.trim(),
-                        'date': DateTime.now(),
-                      });
+                      transactions.insert(0, transaction);
                     });
 
                     Navigator.pop(dialogContext);
@@ -323,6 +328,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Balance card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -366,7 +372,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
                 ],
               ),
             ),
+
             const SizedBox(height: 18),
+
+            // Credit and debit summary
             Row(
               children: [
                 Expanded(
@@ -388,7 +397,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
                 ),
               ],
             ),
+
             const SizedBox(height: 24),
+
+            // Transaction history heading
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -402,7 +414,9 @@ class _PaymentsPageState extends State<PaymentsPage> {
                 ),
               ],
             ),
+
             const SizedBox(height: 12),
+
             if (transactions.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(32),
@@ -410,14 +424,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
               )
             else
               ...transactions.map((transaction) {
-                final type = transaction['type'] as String;
+                final type = transaction.type;
                 final color = typeColor(type);
-                final date = transaction['date'] as DateTime;
-                final workerId = transaction['workerId'] as String;
-                final currentWorker = workerService.findById(workerId);
-                final workerName =
-                    currentWorker?.name ?? transaction['name'] as String;
-                final amount = (transaction['amount'] as num).toDouble();
+                final worker = workerService.findById(transaction.workerId);
+                final workerName = worker?.name ?? 'Unknown worker';
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -439,6 +449,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
+
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,7 +463,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${transaction['note']}',
+                              transaction.note,
                               style: TextStyle(
                                 color: Colors.grey.shade400,
                                 fontSize: 12,
@@ -460,9 +471,8 @@ class _PaymentsPageState extends State<PaymentsPage> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${date.day.toString().padLeft(2, '0')}/'
-                              '${date.month.toString().padLeft(2, '0')}/'
-                              '${date.year} • ${transaction['method']}',
+                              '${formatDate(transaction.date)}'
+                              ' • ${transaction.method}',
                               style: TextStyle(
                                 color: Colors.grey.shade500,
                                 fontSize: 11,
@@ -471,12 +481,15 @@ class _PaymentsPageState extends State<PaymentsPage> {
                           ],
                         ),
                       ),
+
                       const SizedBox(width: 8),
+
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '${type == 'Credit' ? '+' : '-'}${money(amount)}',
+                            '${type == 'Credit' ? '+' : '-'}'
+                            '${money(transaction.amount)}',
                             style: TextStyle(
                               color: color,
                               fontWeight: FontWeight.bold,
@@ -494,6 +507,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                   ),
                 );
               }),
+
             const SizedBox(height: 80),
           ],
         ),
