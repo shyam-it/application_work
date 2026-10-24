@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../pages/workers_page.dart';
 import '../pages/attendance_page.dart';
 import '../pages/payments_page.dart';
+import '../pages/site_management_page.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -25,12 +26,14 @@ class _MainNavigationState extends State<MainNavigation> {
     const AttendancePage(),
     const PlaceholderPage(title: 'Profile', icon: Icons.person_outline),
     const PaymentsPage(),
+    const SiteManagementPage(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: selectedIndex, children: pages),
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedIndex,
         type: BottomNavigationBarType.fixed,
@@ -54,6 +57,14 @@ class _MainNavigationState extends State<MainNavigation> {
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             label: 'Profile',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.payments_outlined),
+            label: 'Payments',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on_outlined),
+            label: 'Sites',
           ),
         ],
       ),
