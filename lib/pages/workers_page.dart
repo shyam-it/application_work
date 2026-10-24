@@ -47,93 +47,95 @@ class _WorkersPageState extends State<WorkersPage> {
     }).toList();
   }
 
-  void showAddWorkerDialog() {
+  Future<void> showAddWorkerDialog() async {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
 
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF151D32),
-          title: const Text('Add Worker'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Worker name',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF151D32),
+            title: const Text('Add Worker'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Worker name',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  maxLength: 10,
-                  decoration: const InputDecoration(
-                    labelText: 'Mobile number',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                    border: OutlineInputBorder(),
-                    counterText: '',
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile number',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                final phone = phoneController.text.trim();
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = nameController.text.trim();
+                  final phone = phoneController.text.trim();
 
-                if (name.isEmpty || !RegExp(r'^\d{10}$').hasMatch(phone)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Enter a name and valid 10-digit mobile number.',
+                  if (name.isEmpty || !RegExp(r'^\d{10}$').hasMatch(phone)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Enter a name and valid 10-digit mobile number.',
+                        ),
                       ),
-                    ),
-                  );
-                  return;
-                }
+                    );
+                    return;
+                  }
 
-                if (workerService.phoneExists(phone)) {
+                  if (workerService.phoneExists(phone)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('This mobile number already exists.'),
+                      ),
+                    );
+                    return;
+                  }
+
+                  workerService.addWorker(name: name, phone: phone);
+
+                  Navigator.pop(dialogContext);
+
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('This mobile number already exists.'),
-                    ),
+                    const SnackBar(content: Text('Worker added successfully.')),
                   );
-                  return;
-                }
-
-                workerService.addWorker(name: name, phone: phone);
-
-                Navigator.pop(dialogContext);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Worker added successfully.')),
-                );
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(() {
+                },
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
       nameController.dispose();
       phoneController.dispose();
-    });
+    }
   }
 
   @override
