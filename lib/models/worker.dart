@@ -4,27 +4,31 @@ class Worker {
   final String id;
   final String name;
   final String phone;
-  final String role;
-  String status;
+  final String? uid;
+  final bool isActive;
 
-  Worker({
+  const Worker({
     required this.id,
     required this.name,
     required this.phone,
-    this.role = 'Worker',
-    this.status = 'Not marked',
+    this.uid,
+    this.isActive = true,
   });
 
-  Color get statusColor {
-    switch (status) {
-      case 'Present':
-        return const Color(0xFF22C55E);
-      case 'Absent':
-        return const Color(0xFFEF4444);
-      case 'Half-day':
-        return const Color(0xFFF59E0B);
-      default:
-        return Colors.grey;
-    }
-  }
+  factory Worker.fromMap(String id, Map<String, dynamic> data) => Worker(
+    id: id,
+    name: data['name'] as String? ?? '',
+    phone: data['phone'] as String? ?? '',
+    uid: data['uid'] as String?,
+    isActive: data['isActive'] as bool? ?? true,
+  );
+
+  Map<String, dynamic> toMap() => {
+    'name': name.trim(),
+    'phone': phone.trim(),
+    'uid': uid?.trim().isEmpty == true ? null : uid?.trim(),
+    'isActive': isActive,
+  };
+
+  Color get statusColor => Colors.grey;
 }

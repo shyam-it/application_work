@@ -3,7 +3,6 @@ import '../pages/workers_page.dart';
 import '../pages/attendance_page.dart';
 import '../pages/payments_page.dart';
 import '../pages/site_management_page.dart';
-import '../pages/account_status_page.dart';
 import '../services/auth_service.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -28,13 +27,19 @@ class _MainNavigationState extends State<MainNavigation> {
           HomePage(role: widget.role, onNavigate: navigateTo),
         ),
         _NavDestination(
+          'My Attendance',
+          const Icon(Icons.calendar_month),
+          const AttendancePage(workerMode: true),
+        ),
+        _NavDestination(
+          'My Payments',
+          const Icon(Icons.payments_outlined),
+          const PaymentsPage(workerMode: true),
+        ),
+        _NavDestination(
           'Profile',
           const Icon(Icons.person_outline),
-          const AccountStatusPage(
-            title: 'Worker Profile',
-            message:
-                'Your personal profile and attendance view will be available here.',
-          ),
+          const _ProfilePage(),
         ),
       ];
     }
