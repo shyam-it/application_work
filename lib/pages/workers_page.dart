@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../models/worker.dart';
+import '../services/worker_service.dart';
+
 class WorkersPage extends StatefulWidget {
   const WorkersPage({super.key});
 
@@ -10,46 +13,38 @@ class WorkersPage extends StatefulWidget {
 class _WorkersPageState extends State<WorkersPage> {
   final TextEditingController searchController = TextEditingController();
 
-  final List<Map<String, dynamic>> workers = [
-    {
-      'name': 'Rahul Patel',
-      'role': 'Worker',
-      'phone': '9876543210',
-      'status': 'Present',
-      'color': const Color(0xFF22C55E),
-    },
-    {
-      'name': 'Amit Shah',
-      'role': 'Worker',
-      'phone': '9876543211',
-      'status': 'Absent',
-      'color': const Color(0xFFEF4444),
-    },
-    {
-      'name': 'Vijay Parmar',
-      'role': 'Worker',
-      'phone': '9876543212',
-      'status': 'Half-day',
-      'color': const Color(0xFFF59E0B),
-    },
-  ];
+  final WorkerService workerService = WorkerService.instance;
 
   String searchText = '';
 
-  List<Map<String, dynamic>> get filteredWorkers {
-    return workers.where((worker) {
-      final name = worker['name'].toString().toLowerCase();
-      final phone = worker['phone'].toString();
-      final query = searchText.toLowerCase();
+  @override
+  void initState() {
+    super.initState();
+    workerService.addListener(_onWorkersChanged);
+  }
 
-      return name.contains(query) || phone.contains(query);
-    }).toList();
+  void _onWorkersChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    workerService.removeListener(_onWorkersChanged);
     searchController.dispose();
     super.dispose();
+  }
+
+  List<Worker> get filteredWorkers {
+    final query = searchText.toLowerCase();
+
+    return workerService.workers.where((worker) {
+      final name = worker.name.toLowerCase();
+      final phone = worker.phone;
+
+      return name.contains(query) || phone.contains(searchText);
+    }).toList();
   }
 
   void showAddWorkerDialog() {
@@ -92,7 +87,9 @@ class _WorkersPageState extends State<WorkersPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
               child: const Text('Cancel'),
             ),
             FilledButton(
@@ -111,11 +108,7 @@ class _WorkersPageState extends State<WorkersPage> {
                   return;
                 }
 
-                final duplicatePhone = workers.any(
-                  (worker) => worker['phone'] == phone,
-                );
-
-                if (duplicatePhone) {
+                if (workerService.phoneExists(phone)) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('This mobile number already exists.'),
@@ -124,19 +117,9 @@ class _WorkersPageState extends State<WorkersPage> {
                   return;
                 }
 
-                setState(() {
-                  workers.add({
-                    'name': name,
-                    'role': 'Worker',
-                    'phone': phone,
-                    'status': 'Not marked',
-                    'color': Colors.grey,
-                  });
-                });
+                workerService.addWorker(name: name, phone: phone);
 
                 Navigator.pop(dialogContext);
-                nameController.dispose();
-                phoneController.dispose();
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Worker added successfully.')),
@@ -155,9 +138,9 @@ class _WorkersPageState extends State<WorkersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final presentCount = workers
-        .where((worker) => worker['status'] == 'Present')
-        .length;
+    final workers = workerService.workers;
+    final filtered = filteredWorkers;
+    final presentCount = workerService.presentCount;
 
     return Scaffold(
       appBar: AppBar(
@@ -249,14 +232,14 @@ class _WorkersPageState extends State<WorkersPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '${filteredWorkers.length} workers found',
+                    '${filtered.length} workers found',
                     style: TextStyle(color: Colors.grey.shade400),
                   ),
                 ],
               ),
             ),
             Expanded(
-              child: filteredWorkers.isEmpty
+              child: filtered.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -278,13 +261,12 @@ class _WorkersPageState extends State<WorkersPage> {
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                      itemCount: filteredWorkers.length,
+                      itemCount: filtered.length,
                       separatorBuilder: (_, index) =>
                           const SizedBox(height: 12),
                       itemBuilder: (context, index) {
-                        final worker = filteredWorkers[index];
-                        final statusColor = worker['color'] as Color;
-                        final name = worker['name'] as String;
+                        final Worker worker = filtered[index];
+                        final Color statusColor = worker.statusColor;
 
                         return Container(
                           padding: const EdgeInsets.all(16),
@@ -299,7 +281,9 @@ class _WorkersPageState extends State<WorkersPage> {
                                 radius: 26,
                                 backgroundColor: const Color(0xFF312E81),
                                 child: Text(
-                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                  worker.name.isNotEmpty
+                                      ? worker.name[0].toUpperCase()
+                                      : '?',
                                   style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
@@ -313,7 +297,7 @@ class _WorkersPageState extends State<WorkersPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      name,
+                                      worker.name,
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -321,7 +305,7 @@ class _WorkersPageState extends State<WorkersPage> {
                                     ),
                                     const SizedBox(height: 5),
                                     Text(
-                                      worker['phone'] as String,
+                                      worker.phone,
                                       style: TextStyle(
                                         color: Colors.grey.shade400,
                                       ),
@@ -339,7 +323,7 @@ class _WorkersPageState extends State<WorkersPage> {
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        worker['status'] as String,
+                                        worker.status,
                                         style: TextStyle(
                                           color: statusColor,
                                           fontSize: 12,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../pages/workers_page.dart';
 import '../pages/attendance_page.dart';
+import '../pages/payments_page.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -23,6 +24,7 @@ class _MainNavigationState extends State<MainNavigation> {
     const WorkersPage(),
     const AttendancePage(),
     const PlaceholderPage(title: 'Profile', icon: Icons.person_outline),
+    const PaymentsPage(),
   ];
 
   @override
@@ -89,7 +91,7 @@ class HomePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Welcome back, Owner 👋',
+                'Welcome Black, Owner 👋',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -216,7 +218,7 @@ class HomePage extends StatelessWidget {
                     child: _actionCard(
                       Icons.account_balance_wallet_outlined,
                       'Payments',
-                      () => _showComingSoon(context, 'Payments'),
+                      () => onNavigate(4),
                     ),
                   ),
                   const SizedBox(width: 12),
