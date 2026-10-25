@@ -168,10 +168,20 @@ class _WorkersPageState extends State<WorkersPage> {
           child: StreamBuilder<List<Worker>>(
             stream: _service.watchWorkers(),
             builder: (context, snap) {
-              if (snap.hasError)
-                return const Center(
-                  child: Text('Could not load workers. Check Firestore rules.'),
+              if (snap.hasError) {
+                debugPrint('WORKERS PAGE ERROR: ${snap.error}');
+                debugPrintStack(stackTrace: snap.stackTrace);
+
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Could not load workers.\n\n${snap.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 );
+              }
               if (!snap.hasData)
                 return const Center(child: CircularProgressIndicator());
               final q = _search.text.toLowerCase();

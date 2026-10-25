@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/worker.dart';
+import 'package:flutter/foundation.dart';
 
 class WorkerService {
   WorkerService({FirebaseFirestore? firestore, FirebaseAuth? auth})
@@ -28,21 +29,27 @@ class WorkerService {
 
   Stream<List<Worker>> watchWorkers({bool activeOnly = true}) {
     Query<Map<String, dynamic>> query = _workers;
-    if (activeOnly) query = query.where('isActive', isEqualTo: true);
-    return query.snapshots().map(
-      (s) => s.docs.map((d) => Worker.fromMap(d.id, d.data())).toList()
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
-    );
-  }
 
-  Stream<List<Worker>> watchMyWorker() {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return Stream.value(const []);
-    return _workers
-        .where('uid', isEqualTo: uid)
-        .limit(1)
+    if (activeOnly) {
+      query = query.where('isActive', isEqualTo: true);
+    }
+
+    return query
         .snapshots()
-        .map((s) => s.docs.map((d) => Worker.fromMap(d.id, d.data())).toList());
+        .map((snapshot) {
+          debugPrint('Workers loaded: ${snapshot.docs.length}');
+
+          return snapshot.docs
+              .map((doc) => Worker.fromMap(doc.id, doc.data()))
+              .toList()
+            ..sort(
+              (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+            );
+        })
+        .handleError((Object error, StackTrace stackTrace) {
+          debugPrint('WORKERS FIRESTORE ERROR: $error');
+          debugPrintStack(stackTrace: stackTrace);
+        });
   }
 
   Future<void> addWorker({
